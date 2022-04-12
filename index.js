@@ -75,7 +75,10 @@ function locationExists(locationPath) {
 function deployProject() {
   return new Promise(function (resolve, reject) {
     emitLog('Starting deployment process....');
-    executeCommand('mup', ['deploy']).then(function (stdout) {
+    var projectNameStartingIndex = program.gitUrl.lastIndexOf('/') + 1;
+    var projectNameEndingIndex = program.gitUrl.lastIndexOf('.git');
+    var projectName = program.gitUrl.substr(projectNameStartingIndex, projectNameEndingIndex - projectNameStartingIndex);
+    executeCommand('mup', ['deploy', `--config=${projectName}/private/cli/mup/${program.context ? program.context : 'dev'}/mup.js`, `--settings=${projectName}/private/cli/mup/${program.context ? program.context : 'dev'}/settings.json`]).then(function (stdout) {
       emitLog(stdout);
       emitLog('Deployment process done.');
     }, commandError);
@@ -134,6 +137,7 @@ function onMupAutoDeployLog(logTxt) {
 program
   .version('0.0.1')
   .arguments('<git-url>')
+  .option('-c, --context <context-name>', 'deployment context to use (dev/prod/... etc)')
   .option('-t --token <secret-token>', 'application access token')
   .option('-p, --port <port-number>', 'port to listen')
   .option('-b, --branch <branch-name>', 'branch to checkout')
