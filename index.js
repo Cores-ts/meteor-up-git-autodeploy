@@ -74,7 +74,7 @@ function locationExists(locationPath) {
 
 function deployProject() {
   return new Promise(function (resolve, reject) {
-    emitLog('Starting deployment process....');
+    emitLog('Starting deployment process...');
     var projectNameStartingIndex = program.gitUrl.lastIndexOf('/') + 1;
     var projectNameEndingIndex = program.gitUrl.lastIndexOf('.git');
     var projectName = program.gitUrl.substr(projectNameStartingIndex, projectNameEndingIndex - projectNameStartingIndex);
@@ -87,6 +87,7 @@ function deployProject() {
 
 app.post('/deploy', function (req, res) {
   if (program.token && (!req.query.token || (req.query.token !== program.token))) {
+    emitLog("Connection rejected - wrong token.")
     return res.sendStatus(403);
   } else {
     res.sendStatus(200);
@@ -97,19 +98,24 @@ app.post('/deploy', function (req, res) {
     var projectName = program.gitUrl.substr(projectNameStartingIndex, projectNameEndingIndex - projectNameStartingIndex);
     locationExists(projectName).then(function (exists) {
       if (!exists) {
-        emitLog('Project has not been cloned yet. Cloning....');
+        emitLog('Project has not been cloned yet. Cloning...');
         executeCommand('git', ['clone', program.gitUrl]).then(function (stdout) {
           emitLog(stdout);
           emitLog('Done cloning');
-          emitLog('Checking out branch ' + branch + '....');
+          emitLog('Checking out branch ' + branch + '...');
           executeCommand('git', ['-C', projectName, 'checkout', 'origin/' + branch]).then(function () {
             emitLog(stdout);
             emitLog('Checked out branch ' + branch);
-            deployProject();
+            emitLog('Initializing Git submodules...');
+            executeCommand('git', ['-C', projectName, 'submodule', 'update', '--init']).then(function () {
+              emitLog(stdout);
+              emitLog('Git submodules initialized');
+              deployProject();
+            }, commandError);
           }, commandError);
         }, commandError);
       } else {
-        emitLog('Checking out branch ' + branch + '....');
+        emitLog('Checking out branch ' + branch + '...');
         executeCommand('git', ['-C', projectName, 'checkout', 'origin/' + branch]).then(function (stdout) {
           emitLog(stdout);
           emitLog('Checked out branch ' + branch);
@@ -117,7 +123,12 @@ app.post('/deploy', function (req, res) {
           executeCommand('git', ['-C', projectName, 'pull', 'origin', branch]).then(function () {
             emitLog(stdout);
             emitLog('Pulled changes');
-            deployProject();
+            emitLog('Updating Git submodules...');
+            executeCommand('git', ['-C', projectName, 'submodule', 'update']).then(function () {
+              emitLog(stdout);
+              emitLog('Git submodules updated');
+              deployProject();
+            }, commandError);
           }, commandError);
         }, commandError);
       }
@@ -135,7 +146,7 @@ function onMupAutoDeployLog(logTxt) {
 }
 
 program
-  .version('0.0.1')
+  .version('0.2.2')
   .arguments('<git-url>')
   .option('-c, --context <context-name>', 'deployment context to use (dev/prod/... etc)')
   .option('-t --token <secret-token>', 'application access token')
@@ -151,6 +162,7 @@ program
       program.slack = url.parse(program.slack);
     }
     app.listen(port);
+    emitLog(`[v0.2.2] Autodeploy Mini-API listening on port ${port}`)
   })
   .parse(process.argv);
 
